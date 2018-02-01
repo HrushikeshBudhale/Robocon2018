@@ -131,6 +131,7 @@ void serialEvent() {
                         Kd = inputString.substring(inputString.indexOf('=')+1).toFloat();
                         break;
         }
+        myPID.SetTunings(Kp, Ki, Kd);
         Serial.println(inputString);
         Serial.print("End Pos =");
         Serial.print(reqd_pos);
