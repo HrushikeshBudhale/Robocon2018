@@ -1,9 +1,9 @@
 //these pins can not be changed 2/3 are special pins
-#define dir 8
-#define pwm 9
-#define valve 4
-#define encoderPin1 2
-#define encoderPin2 3
+#define dir 3//8
+#define pwm 4//9
+#define valve 2//4
+#define encoderPin1 64//2
+#define encoderPin2 65//3
 
 double release_val = 51100;
 byte r_dir = 1;

@@ -14,25 +14,26 @@ void setup() {
   pinMode(junctionPulse,INPUT);   // Setting junctionPulse as digital input pin
 
   // Setting pin 10 - 13 as digital output pin
-  for(byte i=10;i<=13;i++) {
-    pinMode(i,OUTPUT);
-  }
+//  for(byte i=10;i<=13;i++) {
+//    pinMode(i,OUTPUT);
+//  }
 
   // Setting initial condition of serialEn pin to HIGH
   digitalWrite(serialEn,HIGH);
 
   // Setting the initial condition of motors
   // make sure both PWM pins are LOW
-  digitalWrite(pwm1,LOW);
-  digitalWrite(pwm2,LOW);
-
-  // State of DIR pins are depending on your physical connection
-  // if your robot behaves strangely, try changing thses two values
-  digitalWrite(dir1,LOW);
-  digitalWrite(dir2,LOW);
+//  digitalWrite(pwm1,LOW);
+//  digitalWrite(pwm2,LOW);
+//
+//  // State of DIR pins are depending on your physical connection
+//  // if your robot behaves strangely, try changing thses two values
+//  digitalWrite(dir1,LOW);
+//  digitalWrite(dir2,LOW);
 
   // Begin serial communication with baudrate 9600
-  Serial.begin(9600);
+  Serial.begin(115200);
+  Serial3.begin(115200);
 
   // Clear internal junction counter of LSA08
   clearJunction();
@@ -44,36 +45,37 @@ void loop() {
   
   // Checking for junction crossing, if juction detected, 
   // keep moving forward
-  if(digitalRead(junctionPulse)) {
-    while(digitalRead(junctionPulse)) {
-      moveForward();
-    }
-    // Retrieve the junction count from LSA08
-    // You can do whatever you want with the junction count
-    junctionCount = getJunction();
-  }
+//  if(digitalRead(junctionPulse)) {
+//    while(digitalRead(junctionPulse)) {
+//      moveForward();
+//    }
+//    // Retrieve the junction count from LSA08
+//    // You can do whatever you want with the junction count
+//    junctionCount = getJunction();
+//  }
   
   digitalWrite(serialEn,LOW);   // Set serialEN to LOW to request UART data
-  while(Serial.available() <= 0);   // Wait for data to be available
-  dummy = Serial.read();    // Read incoming data and store in dummy
-  digitalWrite(serialEn,HIGH);    // Stop requesting for UART data
-
-  // Checking for sensor number 1 and 2, if line detected, move left
-  if(bitRead(dummy,1) || bitRead(dummy,2))
-  moveLeft();
-
-  // Checking for sensor number 5 and 6, if line detected, move right
-  else if(bitRead(dummy,5) || bitRead(dummy,6))
-  moveRight();
-
-  // Checking for sensors number 3 and 4, 
-  // if line is detected by either of these sensor, move forward
-  else if(bitRead(dummy,3)||bitRead(dummy,4))
-  moveForward();
-
-  // If no line is detected, stay at the position
-  else
-  wait();
+  while(Serial3.available() <= 0);   // Wait for data to be available
+  dummy = Serial3.read();    // Read incoming data and store in dummy
+  Serial.println(dummy)
+//  digitalWrite(serialEn,HIGH);    // Stop requesting for UART data
+//
+//  // Checking for sensor number 1 and 2, if line detected, move left
+//  if(bitRead(dummy,1) || bitRead(dummy,2))
+//  moveLeft();
+//
+//  // Checking for sensor number 5 and 6, if line detected, move right
+//  else if(bitRead(dummy,5) || bitRead(dummy,6))
+//  moveRight();
+//
+//  // Checking for sensors number 3 and 4, 
+//  // if line is detected by either of these sensor, move forward
+//  else if(bitRead(dummy,3)||bitRead(dummy,4))
+//  moveForward();
+//
+//  // If no line is detected, stay at the position
+//  else
+//  wait();
 
   // Put some delay to avoid the robot jig while making a turn
   delay(100);

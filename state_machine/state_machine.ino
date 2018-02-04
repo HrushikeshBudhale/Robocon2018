@@ -10,12 +10,12 @@
 // ################ Defining pin names #######################
 
 //these pins can not be changed 2/3 are special pins
-#define dir 8
-#define pwm 9
-#define valve 4
-#define angle_sensor 5
-#define encoderPin1 2
-#define encoderPin2 3
+#define dir 3
+#define pwm 4
+#define valve 2
+#define encoderPin1 66
+#define encoderPin2 67
+#define laser_sensor 41
 
 // ################ global variables decleration ##############
 
@@ -24,22 +24,30 @@ double pwm_val = 0;
 char r_dir=1;
 
 volatile int lastEncoded = 0;
-volatile double encoderValue = 0;
+double encoderValue = 0;
 
 String inputString = "";        // a String to hold incoming data
 boolean stringComplete = true;  // whether the string is complete
 
-double Kp=0.3;
-double Ki=0.0;
+double Kp=0.2;
+double Ki=0.05;
 double Kd=0.007;
-double reqd_pos = 3000;
+double reqd_pos = -3000;
+int throw_velocity = 120;
+int travel_velocity = 60;
 
 byte state = 0 ;
 char run = 0;
+unsigned char flag = 0;
 
 PID myPID(&encoderValue, &pwm_val, &reqd_pos, Kp, Ki, Kd, DIRECT);
 
 void setup() {
+
+    //temperary
+    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(39, OUTPUT); 
+    digitalWrite(39, HIGH);
     
     myPID.SetMode(AUTOMATIC);
     myPID.SetOutputLimits(-100,100);
@@ -47,12 +55,13 @@ void setup() {
   
     pinMode(encoderPin1, INPUT); 
     pinMode(encoderPin2, INPUT);
+    pinMode(laser_sensor, INPUT);
     
     pinMode(dir, OUTPUT); 
     digitalWrite(dir,r_dir);
     
     pinMode(pwm,OUTPUT);
-    analogWrite(pwm,pwm_val);
+    analogWrite(pwm, 0);
 
     pinMode(valve,OUTPUT);
     digitalWrite(valve,LOW);
@@ -62,23 +71,32 @@ void setup() {
     
     // call updateEncoder() when any high/low changed seen
     // on interrupt 0 (pin 2), or interrupt 1 (pin 3) 
-    attachInterrupt(0, updateEncoder, CHANGE); 
-    attachInterrupt(1, updateEncoder, CHANGE);
+    attachInterrupt(encoderPin1, updateEncoder, CHANGE); 
+    attachInterrupt(encoderPin2, updateEncoder, CHANGE);
     
     Serial.begin (115200);
     while(Serial.available() <= 0);
 }
 
 void loop(){ 
+    digitalWrite(LED_BUILTIN,digitalRead(laser_sensor));
     if(run == 1) {
         switch(state){
-            case 0 :    encoderValue = 0;
-                        Serial.print(encoderValue);
-                        reqd_pos = 3000;
+            case 0 :    setPWM(travel_velocity);
+            
+                        // wait till arm reaches initial pos
+                        while(digitalRead(laser_sensor) == LOW);
+                            //Serial.println(digitalRead(laser_sensor));
+
+                        encoderValue = 0;
+                        Serial.println("Reached Zero !");
+                        setPWM(0);
+                        reqd_pos = -3000;
                         state = 1;
+                        
                         // for testing purpose
-                        run = 0;
-                        stringComplete = true;
+//                        run = 0;
+//                        stringComplete = true;
                         break;
         
             case 1:     myPID.Compute();
@@ -86,33 +104,73 @@ void loop(){
                         Serial.print("\t");
                         Serial.println(encoderValue);
                         setPWM(pwm_val);
-                        //if keypress{ 
-                            digitalWrite(valve,LOW);
+
+                        // open valve when reached
+                        if(encoderValue < -2500 && encoderValue > -3500){
+                            digitalWrite(valve, HIGH);
+                        }
+
+                        // wait for keypress
+                        if(flag == 1){
                             state = 2;
+                            flag = 0;
+                            digitalWrite(valve, LOW);
                         }
                         break;
             
-            case 2:     myPID.Compute();
+            case 2:     
+                        myPID.Compute();
+                        Serial.print("Grabbed !! \t");
                         Serial.print(pwm_val);
                         Serial.print("\t");
                         Serial.println(encoderValue);
                         setPWM(pwm_val);
-                        //if keypress then pwm_val = 100; state = 3;
+                        if(flag == 1){
+                            state = 3;
+                            flag = 0;
+                            setPWM(travel_velocity);
+                        }
                         break;
         
-            case 3:     //apply PID for postion 0
-                        //wait till keypress
-                        //if keypress then pwm_val = 100; state = 4;
+            case 3:     // wait till arm reaches initial pos
+                        while(digitalRead(laser_sensor) == LOW){
+                            Serial.println("");
+                            Serial.print("Laser \t");
+                            Serial.print(digitalRead(laser_sensor));
+                            Serial.println("");
+                            digitalWrite(LED_BUILTIN,digitalRead(laser_sensor));
+                        }
+                        
+                        encoderValue = 0;
+                        Serial.println("Reached Zero !");
+                        setPWM(0);
+                        reqd_pos = 0;
+                        state = 4;
+                        
+                        // for testing purpose
+//                        run = 0;
+//                        stringComplete = true;
                         break;
-        
-            case 4:     if (abs(encoderValue) > release_val) {
-                            analogWrite(pwm,0);
+                        
+            case 4:     myPID.Compute();
+                        setPWM(pwm_val);
+                        Serial.print(pwm_val);
+                        Serial.print("\t");
+                        Serial.println(encoderValue);
+                        if(flag == 1){
+                            state = 5;
+                            flag = 0;
+                            setPWM(throw_velocity);
+                            Serial.println("Running pid");
+                        }
+                        
+            case 5:     if (abs(encoderValue) > release_val) {
                             digitalWrite(valve,HIGH); 
                             Serial.print("Released at: ");
                             Serial.println(encoderValue);
+                            setPWM(0);
+                            encoderValue = 0;
                             state = 0;
-                            // move until zero point reached 
-                            analogWrite(pwm,20);
                         }
                         break;
         }
@@ -124,7 +182,7 @@ void loop(){
         stringComplete = false;
     }
 }
-
+    
 void serialEvent() {
     char inChar = (char)Serial.read();
     if (inChar == '\n') {
@@ -133,12 +191,13 @@ void serialEvent() {
             case 's':   //stops operation
                         run = 0;
                         setPWM(0);
+                        encoderValue = 0;
                         break;
             case 'r':   //runs the states
                         run = 1;
                         break;
-            case 'e':   //sets encoder value for const pos
-                        reqd_pos = extract_num();
+            case 'e':   //sets flag for next state
+                        flag = 1;
                         break;
             case 'p':   //sets P value for PID controller
                         Kp = extract_num();
@@ -153,7 +212,7 @@ void serialEvent() {
                         release_val = extract_num();
                         break;
             case 'f':   //sets power of motor
-                        pwm_val = extract_num();
+                        throw_velocity = extract_num();
                         break;                  
             case 'm':   //sets state number
                         state = extract_num();
@@ -164,16 +223,16 @@ void serialEvent() {
         inputString += inChar;
 }
 
-double extract_num(String str) {
-    return(str.substring(str.indexOf('=')+1).toFloat());
+double extract_num() {
+    return(inputString.substring(inputString.indexOf('=')+1).toFloat());
 }
 
 void print_data(void) {
     Serial.println(inputString);
     Serial.print("Encoder=");
     Serial.print(encoderValue);
-    Serial.print("PID_Pos=");
-    Serial.print(reqd_pos);
+    Serial.print("\tCurr_state=");
+    Serial.print(state);
     Serial.print("\tKp=");
     Serial.print(Kp);
     Serial.print("\tKi=");
@@ -187,7 +246,7 @@ void print_data(void) {
     Serial.println("\nPress 'r' to run");
 }
 
-void setPWM(char val){
+void setPWM(int val){
     if(val>0)
         digitalWrite(dir, HIGH);
     else 
@@ -204,7 +263,6 @@ void updateEncoder(){
 
   if(sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) 
     encoderValue ++;
-  //if(sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue --;
   else encoderValue --;
 
   lastEncoded = encoded; //store this value for next time

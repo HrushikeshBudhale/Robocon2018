@@ -7,7 +7,7 @@
 #include <PID_v1.h>
 #include <Ultrasonic.h>
 
-// ################ Defining motor pin names ##############
+// ################ Defining pin names ##############
 
 //these pins can not be changed 2/3 are special pins
 const unsigned char motor_inA[4] = {58, 60, 62, 64};
@@ -18,14 +18,13 @@ const unsigned char motor_pwm[4] = {12, 10, 8, 6};
 const unsigned char sensor_left[2] = {31,33};
 const unsigned char sensor_right[2] = {35,37};
 
+// ################ Declearing global variables ##############
+
 const unsigned char dir_val_f[4] = {0, 0, 1, 1};
 const unsigned char dir_val_r[4] = {1, 1, 0, 0};
 
 double pwm_val_d = 0;
 double pwm_val_a = 0;
-
-
-char r_dir=1;
 
 volatile int lastEncoded[4] = {0, 0, 0, 0};
 volatile double encoderValue[4] = {0, 0, 0, 0};
@@ -35,24 +34,25 @@ int lastLSB[4] = {0, 0, 0, 0};
 String inputString = "";         // a String to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
 
-
-double Kp_d = 6;
-double Ki_d = 0;
+double Kp_d = 6;    // PID parameters for maintaining distance of bot from wall
+double Ki_d = 20;
 double Kd_d = 0;
-double Kp_a = 3;
-double Ki_a = 0;
+
+double Kp_a = 6;    // PID parameters for keeping bot parallel to the wall
+double Ki_a = 15;
 double Kd_a = 0;
+
 double end_dist = 25;
 double end_phi = 0;
 
-byte run = 0;
+byte run = 0;       // flag controlling run and stop of operation in loop
 double dist = 0;
 double phi = 0;
 
 Ultrasonic ultrasonic_left(sensor_left[0], sensor_left[1]);
 Ultrasonic ultrasonic_right(sensor_right[0], sensor_right[1]);
-PID distPID(&dist, &pwm_val_d, &end_dist, Kp_d, Ki_d, Kd_d, DIRECT);
-PID phiPID(&phi, &pwm_val_a, &end_phi, Kp_a, Ki_a, Kd_a, DIRECT);
+PID distPID(&dist, &pwm_val_d, &end_dist, Kp_d, Ki_d, Kd_d, DIRECT);    // controller for maintaining distance
+PID phiPID(&phi, &pwm_val_a, &end_phi, Kp_a, Ki_a, Kd_a, DIRECT);       // controller for maintaining angle 
 
 void setup() {
 
@@ -71,6 +71,7 @@ void setup() {
     attachInterrupt(motor_inA[3], updateEncoder4, CHANGE);
     attachInterrupt(motor_inB[3], updateEncoder4, CHANGE);
 
+    // set direction, speed and pins for controlling motors 
     for(char i = 0; i<4; i++){
         pinMode(motor_dir[i], OUTPUT);  
         pinMode(motor_pwm[i], OUTPUT);
@@ -91,17 +92,10 @@ void setup() {
 void loop(){ 
     if(run == 1){
         dist = distance();
-        phi = angle();
+        phi = angle();  
         distPID.Compute();
         phiPID.Compute();
-        Serial.print("Distance: ");
-        Serial.print(distance());
-        Serial.print("\tAngle: ");
-        Serial.print(angle());
-        Serial.print("\tPWM_d: ");
-        Serial.println(-pwm_val_d);
-        Serial.print("\tPWM_a: ");
-        Serial.println(pwm_val_a);
+        loop_print();
         setPWM(pwm_val_d, pwm_val_a);
     }
     if (stringComplete) {
@@ -162,6 +156,7 @@ void serialEvent() {
             case 'p':   //sets P value for distance controller
                         Kp_d = inputString.substring(inputString.indexOf('=')+1).toFloat();
                         break;
+            
             case 'i':   //sets I value for distance controller
                         Ki_d = inputString.substring(inputString.indexOf('=')+1).toFloat();
                         break;
@@ -193,14 +188,27 @@ void serialEvent() {
         inputString += inChar;
 }
 
+void loop_print(void){
+    Serial.print("Distance: ");
+    Serial.print(distance());
+    Serial.print("\tAngle: ");
+    Serial.print(angle());
+    Serial.print("\tPWM_d: ");
+    Serial.print(-pwm_val_d);
+    Serial.print("\tPWM_a: ");
+    Serial.println(pwm_val_a);
+}
+
 unsigned char distance(void){
     // average of two distances
     return((ultrasonic_left.distanceRead() + ultrasonic_right.distanceRead())/2);    
 }
 
-unsigned int angle(void){
+int angle(void){
     // difference of two distances
-    return(ultrasonic_left.distanceRead() - ultrasonic_right.distanceRead());    
+    int left = ultrasonic_left.distanceRead();
+    int right = ultrasonic_right.distanceRead();
+    return(left - right);    
     // angle is +ve if bot is slightly left
 }
 
