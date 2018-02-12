@@ -52,7 +52,7 @@ double Kd_p = 0.001;
 long unsigned int now = 0;
 long unsigned int pre_now = 0;
 
-byte run = 1;       // flag controlling run and stop of operation in loop
+byte run = 0;       // flag controlling run and stop of operation in loop
 
 PID postionPID(&encoderValue[2], &end_velocity, &end_pos, Kp_soft, Ki_soft, Kd_soft, DIRECT);      // controller for maintaining stopping position
 

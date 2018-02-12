@@ -23,7 +23,7 @@
 */
 
 // constants won't change. They're used here to set pin numbers:
-const int buttonPin = 41;     // the number of the pushbutton pin
+const int buttonPin = 51;     // the number of the pushbutton pin
 const int ledPin =  13;      // the number of the LED pin
 
 // variables will change:
@@ -34,8 +34,6 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   // initialize the pushbutton pin as an input:
   pinMode(buttonPin, INPUT);
-  pinMode(39, OUTPUT); 
-  digitalWrite(39, HIGH);
 }
 
 void loop() {
