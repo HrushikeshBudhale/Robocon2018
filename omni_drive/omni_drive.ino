@@ -107,7 +107,6 @@ void loop(){
 void pwm_compute(void){
     for(char i=0; i<4; i++){
         pwm_val[i] = (front_pwm_val * front_dir[i]) + (left_pwm_val * left_dir[i]) + (acw_pwm_val * acw_dir[i]);
-        //pwm_val[i] = (front_pwm_val + left_pwm_val + acw_pwm_val);
     }
 }
 
@@ -226,6 +225,8 @@ void setPWM(void){
             digitalWrite(motor_dir[i], LOW);
         else
             digitalWrite(motor_dir[i], HIGH);
+        if(abs(pwm_val[i]) < 255)
+            pwm_val[i] = 255;
         analogWrite(motor_pwm[i], abs(pwm_val[i]));
     }
 }

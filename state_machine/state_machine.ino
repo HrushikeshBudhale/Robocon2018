@@ -32,7 +32,7 @@ double Kp_th=0.1;
 double Ki_th=0.05;
 double Kd_th=0.001;
 double reqd_pos = -3000;
-int throw_velocity = -160;
+int throw_velocity = -80;
 int travel_velocity = 20;
 
 double now = 0;
@@ -171,11 +171,15 @@ void loop(){
                             pre_now = now;
                             pre_encoder = encoderVal_th;
                         }
+                        if (abs(encoderVal_th) > 24000) {
+                            setThPWM(-130);
+                        }
                         if (abs(encoderVal_th) > release_val) {
                             digitalWrite(valve,HIGH); 
                             Serial.print("Released at: ");
                             Serial.println(encoderVal_th);
-                            setThPWM(0);
+                            setThPWM(100);
+                            delay(500);
                             encoderVal_th = 0;
                             throw_state = 0;
                         }

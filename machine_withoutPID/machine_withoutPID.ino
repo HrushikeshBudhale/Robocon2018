@@ -18,6 +18,7 @@
 #define laser_sensor 51
 #define lidar_sensor 53
 
+
 #define FRONT 0
 #define LEFT 1
 #define ACW 2
@@ -29,6 +30,7 @@ const unsigned char motor_pwm[4] = {12, 10, 8, 6};
 
 const unsigned char sensor_left[2] = {31,33};
 const unsigned char sensor_right[2] = {35,37};
+
 
 // ################ Declearing global variables for drive ##############
 
@@ -43,51 +45,49 @@ int lastLSB[4] = {0, 0, 0, 0};
 
 int pwm_val[4] = {0, 0, 0, 0};
 
-double front_pwm_val = 0;   // Output from PID
+double front_pwm_val = 0;
 double left_pwm_val = 0;
 double acw_pwm_val = 0;
 
-double pos_wrt_front = 0;   // Input for PID
+double pos_wrt_front = 0;
 double pos_wrt_left = 0;
 double pos_wrt_acw = 0;
 
-double front_dest = 0;  // SetPoint for PID
-double left_dest = 0;
-double acw_dest = 0;
-
-double front_PID_param[3] = {0.1, 0.1, 0};  // PID parameters for maintaining stopping position in front
-double left_PID_param[3] = {0.1, 0.1, 0};   // PID parameters for maintaining stopping position in left
-double acw_PID_param[3] = {0.01, 0.01, 0};   // PID parameters for maintaining stopping position in acw
-
 // ################ Declearing global variables for throw ##############
 
-double release_val[3] = {60300, 60400, 60500};
-int throw_velocity[3] = {-100, -100, - 130};
+double release_val;
 double pwm_val_th = 0;
 
 volatile int lastEncod_th = 0;
 double encoderVal_th = 0;
 double pre_encoder = 0;
 
-double throw_PID_param[3] = {0.1, 0.05, 0.001};   // PID parameters for maintaining horizontal position of arm
+double Kp_th=0.1;
+double Ki_th=0.05;
+double Kd_th=0.001;
 double reqd_pos = -3000;
-int tra vel_velocity = 20;
+int travel_velocity = 20;
 
 double now = 0;
 double pre_now = 0;
 
 // ################ Declearing global variables for ultrasonic ##############
 
-double dist_PID_param[3] = {8, 20, 0};    // PID parameters for maintaining distance of bot from wall
-double angle_PID_param[3] = {6, 15, 0};    // PID parameters for keeping bot parallel to the wall
+double Kp_d = 8;    // PID parameters for maintaining distance of bot from wall
+double Ki_d = 20;
+double Kd_d = 0;
 
-double end_dist = 25;   // SetPoints for PID
+double Kp_a = 6;    // PID parameters for keeping bot parallel to the wall
+double Ki_a = 15;
+double Kd_a = 0;
+
+double end_dist = 25;
 double end_phi = 0;
 
-double dist = 0;        // Input for PID
+double dist = 0;
 double phi = 0;
 
-double pwm_val_d = 0;   // Output from PID
+double pwm_val_d = 0;
 double pwm_val_a = 0;
 
 // ################ Declearing global variables for state machine ##############
@@ -95,23 +95,17 @@ double pwm_val_a = 0;
 String inputString = "";         // a String to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
 
-byte run = 0;       // flag controlling run and stop of operation in loop
+byte run = 1;       // flag controlling run and stop of operation in loop
 byte throw_state = 0;
-int state = 0;
+int state = -1;
 char key = 0;  // permission for setting state
 
-// ################ Creating objects for state machine ##############
-
-PID front_PID(&pos_wrt_front, &front_pwm_val, &front_dest, front_PID_param[0], front_PID_param[1], front_PID_param[2], DIRECT);      // Controller for maintaining stopping position
-PID left_PID(&pos_wrt_left, &left_pwm_val, &left_dest, left_PID_param[0], left_PID_param[1], left_PID_param[2], DIRECT);
-PID acw_PID(&pos_wrt_acw, &acw_pwm_val, &acw_dest, acw_PID_param[0], acw_PID_param[1], acw_PID_param[2], DIRECT);
-
-PID throw_PID(&encoderVal_th, &pwm_val_th, &reqd_pos, throw_PID_param[0], throw_PID_param[1], throw_PID_param[2], DIRECT);     // Controller for maintaining horizontal position of arm
+PID throw_PID(&encoderVal_th, &pwm_val_th, &reqd_pos, Kp_th, Ki_th, Kd_th, DIRECT);
 
 Ultrasonic ultrasonic_left(sensor_left[0], sensor_left[1]);
 Ultrasonic ultrasonic_right(sensor_right[0], sensor_right[1]);
-PID distPID(&dist, &pwm_val_d, &end_dist, dist_PID_param[0], dist_PID_param[1], dist_PID_param[2], DIRECT);     // Controller for maintaining distance
-PID phiPID(&phi, &pwm_val_a, &end_phi, angle_PID_param[0], angle_PID_param[1], angle_PID_param[2], DIRECT);     // Controller for maintaining angle 
+PID distPID(&dist, &pwm_val_d, &end_dist, Kp_d, Ki_d, Kd_d, DIRECT);    // controller for maintaining distance
+PID phiPID(&phi, &pwm_val_a, &end_phi, Kp_a, Ki_a, Kd_a, DIRECT);       // controller for maintaining angle 
 
 void setup() {
     // start serial port at 115200 bps:
@@ -143,125 +137,159 @@ void setup() {
     }
 
     pid_init(); // sets mode, limits and sampleTime
-    left_dest = 140416;
-    front_dest = 0;
-
-    while(Serial.available() <= 0);
+//    while(Serial.available() <= 0);
+    delay(5000);
 }
 
 void loop(){
     digitalWrite(LED_BUILTIN,digitalRead(laser_sensor));
     if(run == 1){
-        loop_calc();
         switch(state){
-           case -1: left_dest = 106132;
-                    front_dest = 0;
-                    stop();
-                    state = 0;
+           case -1: state = 0;
+                    left_pwm_val = 140;
+                    front_pwm_val = 0;
+                    pwm_compute();
+                    setPWM();
                     stringComplete = true;
                     break;
 
-           case 0:  if(pos_wrt_left > 106132 || key == 1){  // To left
+
+           case 0:  if(ret_pos(LEFT) > 106132 || key == 1){  // To left
                         stop();
                         state = 1;
-                        //adjustPosition();
+                        adjustPosition();
+                        stop();
                         grab();
-                        front_dest = -74882;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = -140;
+                        pwm_compute();
+                        setPWM();                    
                         stringComplete = true;
+                        
                     }
                     break;
 
-           case 1:  if(pos_wrt_front < -74882 || key == 1){    // TO 1st throw
+           case 1:  if(ret_pos(FRONT) < -74882 || digitalRead(lidar_sensor) || key == 1){    // TO 1st throw
                         stop();
                         state = 2;
                         delay(500);
                         front_pwm_val = 0;
-                        left_pwm_val = -80;
+                        left_pwm_val = -120;
+                        pwm_compute();
+                        setPWM();
+                        delay(2000);
+                        throw1(-100,60300);
+                        stop();
+                        delay(100);
+                        front_pwm_val = 0;
+                        left_pwm_val = 120;
                         pwm_compute();
                         setPWM();
                         delay(1000);
-                        throw1(release_val[0],throw_velocity[0]);
-//                        pwm_compute();
-//                        setPWM();
                         stop();
-                        front_dest = 74882;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = 140;
+                        pwm_compute();
+                        setPWM();
                         stringComplete = true;
                     }
                     break;
 
-           case 2:  if(pos_wrt_front > 74882 || key == 1){ // To home
+           case 2:  if(ret_pos(FRONT) > 74882 || key == 1){ // To home
                         stop();
                         state = 3;
-                        left_dest = 47169;
-                        front_dest = 0;
+                        left_pwm_val = 140;
+                        front_pwm_val = 0;
+                        pwm_compute();
+                        setPWM();
                         stringComplete = true;
                     }
                     break;
 
-           case 3:  if(pos_wrt_left > 47169 || key == 1){   // TO corner
+           case 3:  if(ret_pos(LEFT) > 47169 || key == 1){   // TO corner
                         stop();
                         state = 4;
-                        //adjustPosition();
+                        adjustPosition();
+                        stop();
                         grab();
-                        front_dest = -74882;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = -140;
+                        pwm_compute();
+                        setPWM();
                         stringComplete = true;
                     }
                     break;
 
-           case 4:  if(pos_wrt_front < -74882 || key == 1){    // To 2nd pos
+           case 4:  if(ret_pos(FRONT) < -74882 || digitalRead(lidar_sensor) || key == 1){    // To 2nd pos
                         stop();
                         state = 5;
                         delay(500);
                         front_pwm_val = 0;
-                        left_pwm_val = -80;
+                        left_pwm_val = -120;
+                        pwm_compute();
+                        setPWM();
+                        delay(2000);
+                        throw1(-100,60400);
+                        stop();
+                        front_pwm_val = 0;
+                        left_pwm_val = 120;
                         pwm_compute();
                         setPWM();
                         delay(1000);
-                        throw1(release_val[1],throw_velocity[1]);
-//                        pwm_compute();
-//                        setPWM();
                         stop();
-                        front_dest = 74882;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = 140;
+                        pwm_compute();
+                        setPWM();
                         stringComplete = true;
                     }
                     break;
 
-           case 5:  if(pos_wrt_front > 74882 || key == 1){ // To corner
+           case 5:  if(ret_pos(FRONT) > 74882 || key == 1){ // To corner
                         stop();
                         state = 6;
-                        //adjustPosition();
+                        adjustPosition();
+                        stop();
                         grab();
-                        front_dest = -149646;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = -140;
+                        pwm_compute();
+                        setPWM();
                         stringComplete = true;
                     }
                     break;
 
-           case 6:  if(pos_wrt_front < -149646 || key == 1){   // To 3rd pos
+           case 6:  while(digitalRead(lidar_sensor) == 0);
+                    while(digitalRead(lidar_sensor) == 1);
+                    while(digitalRead(lidar_sensor) == 0);
+                    if(ret_pos(FRONT) < -149646 || digitalRead(lidar_sensor) || key == 1){   // To 3rd pos
                         stop();
                         state = 5;
                         delay(500);
                         front_pwm_val = 0;
-                        left_pwm_val = -80;
+                        left_pwm_val = -120;
+                        pwm_compute();
+                        setPWM();
+                        delay(2000);
+                        throw1(-130,60500);
+                        stop();
+                        front_pwm_val = 0;
+                        left_pwm_val = 120;
                         pwm_compute();
                         setPWM();
                         delay(1000);
-                        throw1(release_val[2],throw_velocity[2]);
-//                        pwm_compute();
-//                        setPWM();
                         stop();
                         stringComplete = true;
-                        front_dest = 0;
-                        left_dest = 0;
+                        left_pwm_val = 0;
+                        front_pwm_val = 140;
+                        pwm_compute();
+                        setPWM();
                         Serial.print("Complete!!");
                     }
                     break;
         }
         key = 0;
+        loop_print();
     }
     
     if (stringComplete) {
@@ -316,7 +344,7 @@ void throw_states(char throw_state){
         
             case 1:     reqd_pos = -3000;
                         t1 = millis();
-                        while((millis()-t1) < 5000){
+                        while((millis()-t1) < 3000){
                             throw_PID.Compute();
                             Serial.print(pwm_val_th);
                             Serial.print("\t");
@@ -334,7 +362,7 @@ void throw_states(char throw_state){
             
             case 2:     digitalWrite(valve, LOW);
                         t1= millis();
-                        while((millis()-t1) < 1000){
+                        while((millis()-t1) < 3000){
                             throw_PID.Compute();
                             Serial.print("Grabbed !! \n");
 //                            Serial.print(pwm_val_th);
@@ -367,22 +395,8 @@ void throw_states(char throw_state){
                             Serial.print("\t");
                             Serial.println(encoderVal_th);
                         }
-                        break;                        
+                        break;
     }
-}
-
-void loop_calc(void){
-    pos_wrt_front = ret_pos(FRONT);
-    pos_wrt_left = ret_pos(LEFT);
-    pos_wrt_acw = ret_pos(ACW);
-    
-    front_PID.Compute();
-    left_PID.Compute();
-    acw_PID.Compute();
-    pwm_compute();  // Calculates pwm value for each wheel
-    setPWM();       // sets pwm for all wheels considering diretion
-    
-    loop_print();
 }
 
 void print_data(void){
@@ -391,11 +405,8 @@ void print_data(void){
 }
 
 void stop(void){
-    run = 0;
-    acw_dest = 0;
     setThPWM(0);
     encoderVal_th = 0;
-                        
     for(char i = 0; i<4; i++){
         encoderValue[i] = 0;
         pwm_val[i] = 0;   
@@ -411,7 +422,7 @@ void pwm_compute(void){
 
 void adjustPosition(void){
     int t1 = millis();
-    while((t1 - millis()) < 6000){
+    while((millis() - t1) < 10000){
         dist = distance();
         phi = angle();  
         distPID.Compute();
@@ -419,66 +430,43 @@ void adjustPosition(void){
         for(char i=0; i<4; i++){
             pwm_val[i] = (pwm_val_a * acw_dir[i]) - (pwm_val_d * front_dir[i]);
         }
+        Serial.print(dist);
+        Serial.print("\t");
+        Serial.print(phi);
+        Serial.print("\t");
+        Serial.print(pwm_val_a);
+        Serial.print("\t");
+        Serial.print(pwm_val_d);
+        
         setPWM();       // sets pwm for all wheels considering diretion    
     }
-    stop();
 }
  
-double distance(void){
+unsigned char distance(void){
     // average of two distances
     return((ultrasonic_left.distanceRead() + ultrasonic_right.distanceRead())/2);    
 }
 
-double angle(void){
+int angle(void){
     // difference of two distances
     int left = ultrasonic_left.distanceRead();
     int right = ultrasonic_right.distanceRead();
     return(left - right);    
-    // angle is +ve if bot is slightly anticlockwise
+    // angle is +ve if bot is slightly left
 }
 
-void serialEvent(void){
+void serialEvent(void) {
     char inChar = (char)Serial.read();
     if (inChar == '\n') {
         stringComplete = true;
         switch(inputString.charAt(0)){
             case 's':   //stops the controller
                         stop();
+                        run = 0;
                         break;
             case 'r':   //runs the controller
                         run = 1;
                         break;
-            case 'p':   //sets P value for distance controller
-                        front_PID_param[0] = extract_num();
-                        break;
-            case 'i':   //sets I value for distance controller
-                        front_PID_param[1] = extract_num();
-                        break;
-            case ';':   //sets P value for angle controller
-                        left_PID_param[0] = extract_num();
-                        break;
-            case 'k':   //sets I value for angle controller
-                        left_PID_param[1] = extract_num();
-                        break;            
-            case 'f':   //sets I value for angle controller
-                        front_dest = extract_num();
-                        break;            
-            case 'l':   //sets I value for angle controller
-                        left_dest = extract_num();
-                        break;            
-            case 'a':   //sets I value for angle controller
-                        acw_dest = extract_num();
-                        break;            
-            case '1':   //sets velocity and angle for throw
-            case '2':
-            case '3':
-                        throw_velocity[inputString.charAt(0)] = extract_num();
-                        release_val[inputString.charAt(0)] = inputString.substring(inputString.indexOf(',')+1).toFloat();
-                        break;
-            case 'q':   //sets previous state
-                        state = state - 2;
-                        run = 1;
-                        break;                  
             case 'm':   //sets I value for angle controller
                         state = extract_num();
                         state--;
@@ -486,31 +474,11 @@ void serialEvent(void){
                         break;            
                         
         }
-//        front_PID.SetTunings(front_PID_param[0], front_PID_param[1], front_PID_param[2]);          
-//        left_PID.SetTunings(left_PID_param[0], left_PID_param[1], left_PID_param[2]);
-        Serial.println(inputString);
-        Serial.print("F=");
-        Serial.print(front_dest);
-        Serial.print("\tL=");
-        Serial.print(left_dest);
-        Serial.print("\tA=");
-        Serial.print(acw_dest);
-        Serial.print("\tKpf=");
-        Serial.print(front_PID_param[0]);
-        Serial.print("\tKif=");
-        Serial.print(front_PID_param[1]);
-        Serial.print("\tKpl=");
-        Serial.print(left_PID_param[0]);
-        Serial.print("\tKil=");
-        Serial.print(left_PID_param[1]);
+        Serial.print(inputString);
         Serial.println("\nPress 'r' to run");
     }
     else
         inputString += inChar;
-}
-
-double extract_num(void){
-    return(inputString.substring(inputString.indexOf('=')+1).toFloat());
 }
 
 void loop_print(void){
@@ -520,12 +488,8 @@ void loop_print(void){
     Serial.print(ret_pos(LEFT));
     Serial.print("\tA: ");
     Serial.print(ret_pos(ACW));
-    Serial.print("\tfront: ");
-    Serial.print(front_dest);
-    Serial.print("\tleft: ");
-    Serial.print(left_dest);
-
-
+    Serial.print("\tState: ");
+    Serial.print(state);
 //    for(char i=0; i<4; i++){
 //        Serial.print(encoderValue[i]);
 //        Serial.print(" ");
@@ -643,6 +607,10 @@ void updateThEncoder(void){
   lastEncod_th = encoded; //store this value for next time
 }
 
+double extract_num(void) {
+    return(inputString.substring(inputString.indexOf('=')+1).toFloat());
+}
+
 void attachAllInt(void){
     attachInterrupt(motor_inA[0], updateEncoder1, CHANGE);
     attachInterrupt(motor_inB[0], updateEncoder1, CHANGE);
@@ -665,20 +633,8 @@ void attachAllInt(void){
 }
 
 void pid_init(void){
-    front_PID.SetMode(AUTOMATIC);
-    front_PID.SetOutputLimits(-140,140);
-    front_PID.SetSampleTime(2);
-
-    left_PID.SetMode(AUTOMATIC);
-    left_PID.SetOutputLimits(-140,140);
-    left_PID.SetSampleTime(2);   
-
-    acw_PID.SetMode(AUTOMATIC);
-    acw_PID.SetOutputLimits(-140,140);
-    acw_PID.SetSampleTime(2); 
-
     throw_PID.SetMode(AUTOMATIC);
-    throw_PID.SetOutputLimits(-100,100);
+    throw_PID.SetOutputLimits(-50,50);
     throw_PID.SetSampleTime(2);
 
     distPID.SetMode(AUTOMATIC);
@@ -688,5 +644,4 @@ void pid_init(void){
     phiPID.SetMode(AUTOMATIC);
     phiPID.SetOutputLimits(-120,120);
     phiPID.SetSampleTime(2);
-
 }
