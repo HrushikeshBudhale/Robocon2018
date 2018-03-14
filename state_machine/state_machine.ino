@@ -158,7 +158,7 @@ void loop(){
                         if(flag == 1){
                             throw_state = 5;
                             flag = 0;
-                            setThPWM(throw_velocity);
+                            setThPWM(-50);
                             Serial.println("Running pid");
                         }
                         break;
@@ -172,7 +172,7 @@ void loop(){
                             pre_encoder = encoderVal_th;
                         }
                         if (abs(encoderVal_th) > 24000) {
-                            setThPWM(-130);
+                            setThPWM(throw_velocity);
                         }
                         if (abs(encoderVal_th) > release_val) {
                             digitalWrite(valve,HIGH); 
